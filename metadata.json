@@ -1,0 +1,5 @@
+{
+  "name": "FinStream Guard - 金融直播卫士",
+  "description": "一个集成了 DouyinLiveRecorder 概念与 Gemini AI 的高科技金融直播监测平台，用于实时风险分析和合规监控。",
+  "requestFramePermissions": []
+}
