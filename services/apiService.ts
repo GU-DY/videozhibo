@@ -1,9 +1,8 @@
 import { Streamer, StreamPlatform, StreamStatus, Recording } from '../types';
 import { MOCK_STREAMERS, MOCK_RECORDINGS } from '../constants';
 
-const API_BASE = 'http://127.0.0.1:8000/api';
-
-const isDev = true; // Flag to enable mock data fallback
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000/api';
+const useMock = (import.meta as any).env?.VITE_USE_MOCK === 'true';
 
 export const api = {
   // System Status
@@ -13,12 +12,15 @@ export const api = {
       if (!res.ok) throw new Error('Status fetch failed');
       return await res.json();
     } catch (e) {
-      // Return safe default/demo state silently
-      return { 
-        recorder_running: false, 
-        active_urls: MOCK_STREAMERS.length,
-        storage_usage: '12.5 GB (Demo Data)'
-      };
+      if (useMock) {
+        // Return safe default/demo state silently
+        return { 
+          recorder_running: false, 
+          active_urls: MOCK_STREAMERS.length,
+          storage_usage: '12.5 GB (Demo Data)'
+        };
+      }
+      return { recorder_running: false, active_urls: 0, storage_usage: '0 B' };
     }
   },
 
@@ -29,9 +31,9 @@ export const api = {
       if (!res.ok) throw new Error('Start failed');
       return res.json();
     } catch (e) {
-      if (isDev) {
-         console.info("[Demo Mode] Backend not connected. Simulating start.");
-         return { message: "Demo: Recorder started" };
+      if (useMock) {
+        console.info("[Demo Mode] Backend not connected. Simulating start.");
+        return { message: "Demo: Recorder started" };
       }
       throw e;
     }
@@ -43,9 +45,9 @@ export const api = {
       if (!res.ok) throw new Error('Stop failed');
       return res.json();
     } catch (e) {
-      if (isDev) {
-         console.info("[Demo Mode] Backend not connected. Simulating stop.");
-         return { message: "Demo: Recorder stopped" };
+      if (useMock) {
+        console.info("[Demo Mode] Backend not connected. Simulating stop.");
+        return { message: "Demo: Recorder stopped" };
       }
       throw e;
     }
@@ -62,7 +64,11 @@ export const api = {
         id: t.id,
         name: t.name,
         url: t.url,
-        platform: t.platform === 'Douyin' ? StreamPlatform.Douyin : StreamPlatform.TikTok,
+        platform: t.platform === 'Douyin'
+          ? StreamPlatform.Douyin
+          : t.platform === 'Kuaishou'
+            ? StreamPlatform.Kuaishou
+            : StreamPlatform.TikTok,
         status: t.status === 'RECORDING' ? StreamStatus.Recording : StreamStatus.Offline,
         avatar: `https://ui-avatars.com/api/?name=${t.name}&background=random`,
         viewers: 0, 
@@ -70,7 +76,10 @@ export const api = {
         tags: []
       }));
     } catch (e) {
-      return MOCK_STREAMERS;
+      if (useMock) {
+        return MOCK_STREAMERS;
+      }
+      return [];
     }
   },
 
@@ -84,7 +93,7 @@ export const api = {
       if (!res.ok) throw new Error('Add task failed');
       return res.json();
     } catch (e) {
-      if (isDev) {
+      if (useMock) {
         console.info("[Demo Mode] Backend not connected. Task addition simulated.");
         return { message: "Demo: Task added" };
       }
@@ -99,7 +108,10 @@ export const api = {
       if (!res.ok) throw new Error('Recordings fetch failed');
       return await res.json();
     } catch (e) {
-      return MOCK_RECORDINGS;
+      if (useMock) {
+        return MOCK_RECORDINGS;
+      }
+      return [];
     }
   }
 };

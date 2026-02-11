@@ -9,24 +9,64 @@ import { api } from './services/apiService';
 import { Streamer, StreamPlatform, StreamStatus } from './types';
 import { Search, Plus, Filter, Bell, Power } from 'lucide-react';
 
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.error('UI crashed:', error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center p-8">
+          <div className="max-w-md text-center">
+            <h2 className="text-xl font-bold mb-2">页面发生错误</h2>
+            <p className="text-sm text-slate-400 mb-4">请刷新页面或检查控制台日志。</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 rounded bg-cyan-600 text-white text-sm font-bold"
+            >
+              重新加载
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState('dashboard');
   const [selectedStreamerId, setSelectedStreamerId] = useState<string | null>(null);
   const [streamers, setStreamers] = useState<Streamer[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [systemStatus, setSystemStatus] = useState({ recorder_running: false, active_urls: 0 });
+  const [systemStatus, setSystemStatus] = useState<{ recorder_running: boolean; active_urls: number; storage_usage?: string }>({ recorder_running: false, active_urls: 0 });
+  const [uiError, setUiError] = useState<string | null>(null);
 
   const activeStreamer = streamers.find(s => s.id === selectedStreamerId);
+
+  const safeStatus = systemStatus || { recorder_running: false, active_urls: 0, storage_usage: '0 B' };
 
   // Poll for status and tasks
   useEffect(() => {
     const fetchData = async () => {
-      const status = await api.getStatus();
-      setSystemStatus(status);
-      
-      const tasks = await api.getTasks();
-      setStreamers(tasks);
+      try {
+        const status = await api.getStatus();
+        setSystemStatus(status || { recorder_running: false, active_urls: 0, storage_usage: '0 B' });
+      } catch (e) {
+        setSystemStatus({ recorder_running: false, active_urls: 0, storage_usage: '0 B' });
+      }
+
+      try {
+        const tasks = await api.getTasks();
+        setStreamers(Array.isArray(tasks) ? tasks : []);
+      } catch (e) {
+        setStreamers([]);
+      }
     };
 
     fetchData();
@@ -35,26 +75,36 @@ const App: React.FC = () => {
   }, []);
 
   const handleAddStreamer = async (name: string, url: string, platform: StreamPlatform) => {
-    await api.addTask(name, url, platform);
-    // Refresh list immediately
-    const tasks = await api.getTasks();
-    setStreamers(tasks);
-    setIsModalOpen(false);
+    try {
+      setUiError(null);
+      await api.addTask(name, url, platform);
+      // Refresh list immediately
+      const tasks = await api.getTasks();
+      setStreamers(tasks);
+      setIsModalOpen(false);
+    } catch (e) {
+      setUiError('添加失败，请确认后端服务已启动。');
+    }
   };
 
   const toggleRecorder = async () => {
-    if (systemStatus.recorder_running) {
+    try {
+      setUiError(null);
+      if (safeStatus.recorder_running) {
         await api.stopRecorder();
-    } else {
+      } else {
         await api.startRecorder();
+      }
+      const status = await api.getStatus();
+      setSystemStatus(status || { recorder_running: false, active_urls: 0, storage_usage: '0 B' });
+    } catch (e) {
+      setUiError('操作失败，请检查后端服务日志。');
     }
-    const status = await api.getStatus();
-    setSystemStatus(status);
   };
 
   const filteredStreamers = streamers.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.platform.toLowerCase().includes(searchTerm.toLowerCase())
+    (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    String(s.platform || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Render content based on currentView state
@@ -99,13 +149,13 @@ const App: React.FC = () => {
                  <button 
                     onClick={toggleRecorder}
                     className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold shadow-lg transition-all hover:scale-105 ${
-                        systemStatus.recorder_running 
+                        safeStatus.recorder_running 
                         ? 'bg-red-500/20 text-red-400 border border-red-500/50' 
                         : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
                     }`}
                  >
                     <Power size={18} />
-                    {systemStatus.recorder_running ? '停止所有录制' : '启动录制服务'}
+                    {safeStatus.recorder_running ? '停止所有录制' : '启动录制服务'}
                  </button>
 
                  <button 
@@ -117,12 +167,18 @@ const App: React.FC = () => {
               </div>
             </div>
 
+            {uiError && (
+              <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
+                {uiError}
+              </div>
+            )}
+
             {/* Stats Grid */}
             <div className="grid grid-cols-4 gap-4 mb-8">
                 {[
-                  { label: '配置监控任务', value: systemStatus.active_urls || 0, color: 'text-cyan-400', border: 'border-cyan-500/20' },
-                  { label: '后台服务状态', value: systemStatus.recorder_running ? 'RUNNING' : 'STOPPED', color: systemStatus.recorder_running ? 'text-emerald-400' : 'text-slate-500', border: 'border-emerald-500/20' },
-                  { label: '本地存储占用', value: (systemStatus as any).storage_usage || 'Checking...', color: 'text-purple-400', border: 'border-purple-500/20' },
+                  { label: '配置监控任务', value: safeStatus.active_urls || 0, color: 'text-cyan-400', border: 'border-cyan-500/20' },
+                  { label: '后台服务状态', value: safeStatus.recorder_running ? 'RUNNING' : 'STOPPED', color: safeStatus.recorder_running ? 'text-emerald-400' : 'text-slate-500', border: 'border-emerald-500/20' },
+                  { label: '本地存储占用', value: safeStatus.storage_usage || 'Checking...', color: 'text-purple-400', border: 'border-purple-500/20' },
                   { label: '今日捕获文件', value: '--', color: 'text-slate-400', border: 'border-slate-500/20' }
                 ].map((stat, i) => (
                     <div key={i} className={`glass-panel p-4 rounded-xl border ${stat.border}`}>
@@ -161,23 +217,25 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-cyan-500/30">
-      <Sidebar currentView={currentView} onChangeView={(view) => {
-        setCurrentView(view);
-        setSelectedStreamerId(null);
-      }} />
+    <ErrorBoundary>
+      <div className="flex min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-cyan-500/30">
+        <Sidebar currentView={currentView} onChangeView={(view) => {
+          setCurrentView(view);
+          setSelectedStreamerId(null);
+        }} />
 
-      <main className="ml-64 flex-1 p-8 h-screen overflow-hidden flex flex-col">
-        {renderContent()}
-      </main>
+        <main className="ml-64 flex-1 p-8 h-screen overflow-hidden flex flex-col">
+          {renderContent()}
+        </main>
 
-      {isModalOpen && (
-        <AddStreamModal 
-          onClose={() => setIsModalOpen(false)} 
-          onAdd={handleAddStreamer} 
-        />
-      )}
-    </div>
+        {isModalOpen && (
+          <AddStreamModal 
+            onClose={() => setIsModalOpen(false)} 
+            onAdd={handleAddStreamer} 
+          />
+        )}
+      </div>
+    </ErrorBoundary>
   );
 };
 

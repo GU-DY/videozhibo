@@ -11,12 +11,20 @@ export const AddStreamModal: React.FC<AddStreamModalProps> = ({ onClose, onAdd }
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
   const [platform, setPlatform] = useState<StreamPlatform>(StreamPlatform.Douyin);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (url && name) {
-      onAdd(name, url, platform);
+    const trimmedUrl = url.trim();
+    const trimmedName = name.trim();
+
+    if (!trimmedUrl) {
+      setError('Please enter a live URL');
+      return;
     }
+
+    setError('');
+    await onAdd(trimmedName || 'Unknown', trimmedUrl, platform);
   };
 
   return (
@@ -77,12 +85,17 @@ export const AddStreamModal: React.FC<AddStreamModalProps> = ({ onClose, onAdd }
              <p className="text-[10px] text-slate-500 mt-1">系统后台 (DouyinLiveRecorder) 将自动解析此地址。</p>
           </div>
 
+          {error && (
+            <div className="text-xs text-red-400">{error}</div>
+          )}
+
           <div className="pt-4 flex justify-end gap-3">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded text-sm text-slate-300 hover:text-white transition-colors">
               取消
             </button>
             <button 
               type="submit" 
+              disabled={!url.trim()}
               className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 rounded text-sm font-bold text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 hover:scale-105 transition-all"
             >
               开始监控

@@ -28,6 +28,8 @@ const getRiskLabel = (level: string) => {
 
 export const StreamCard: React.FC<StreamCardProps> = ({ streamer, onSelect }) => {
   const isLive = streamer.status === StreamStatus.Live || streamer.status === StreamStatus.Recording;
+  const viewers = Number.isFinite(streamer.viewers) ? streamer.viewers : 0;
+  const displayName = streamer.name || 'Unknown';
   
   return (
     <div 
@@ -48,7 +50,7 @@ export const StreamCard: React.FC<StreamCardProps> = ({ streamer, onSelect }) =>
 
       {/* Avatar & Info */}
       <div className="px-5 pb-5 relative">
-        <div className="absolute -top-14 left-5">
+        <div className="absolute -top-16 left-5">
            <img 
              src={streamer.avatar} 
              alt={streamer.name} 
@@ -58,10 +60,10 @@ export const StreamCard: React.FC<StreamCardProps> = ({ streamer, onSelect }) =>
            />
         </div>
         
-        <div className="mt-10 flex justify-between items-start">
+        <div className="mt-12 flex justify-between items-start">
             <div>
                 <h3 className="font-bold text-white text-lg group-hover:text-cyan-400 transition-colors">
-                    {streamer.name}
+                    {displayName}
                 </h3>
                 <p className="text-slate-400 text-xs mt-1 flex items-center gap-1">
                     <Video size={12} /> {streamer.platform}
@@ -70,7 +72,7 @@ export const StreamCard: React.FC<StreamCardProps> = ({ streamer, onSelect }) =>
             <div className="text-right">
                 <div className="text-xs text-slate-400">在线人数</div>
                 <div className="font-mono text-cyan-400 font-bold">
-                    {streamer.viewers.toLocaleString()}
+                    {viewers.toLocaleString()}
                 </div>
             </div>
         </div>
